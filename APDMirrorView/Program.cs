@@ -43,11 +43,9 @@ namespace LibraryIndexAnalysis
         static void Main(string[] args)
         {
             logger.Trace("Process Started: " + DateTime.Now);
-            Console.WriteLine("Process Started: " + DateTime.Now);
-            logger.Trace(" Getting records from  VFR_DIMS View ...");
-            Console.WriteLine(" Getting records from  VFR_DIMS View ...");
+            Console.WriteLine("Process Started: " + DateTime.Now);           
 
-            GetRecordsFromView();
+            FeedLookupTable();
 
             logger.Trace("Process Completed: " + DateTime.Now);
             Console.WriteLine("Process Completed: " + DateTime.Now);
@@ -55,17 +53,21 @@ namespace LibraryIndexAnalysis
             string line = Console.ReadLine();
         }
 
-        static void GetRecordsFromView()
+        static void FeedLookupTable()
         {
             try
             {
                 string queryString = "";
-                int recordsCount = 0;
-                int recordsFound = 0;
+                //int recordsCount = 0;
                 int recordsAddedCount = 0;
-                int recordsIgnoredCount = 0;
+                //int recordsIgnoredCount = 0;
                 var remoteConnectionString = ConfigurationManager.ConnectionStrings["RemoteLookupSQL"].ConnectionString;
                 var localConnectionString = ConfigurationManager.ConnectionStrings["LocalLookupSQL"].ConnectionString;
+
+                ClearLookupRecord(localConnectionString);
+
+                logger.Trace(" Getting records from  VFR_DIMS View ...");
+                Console.WriteLine(" Getting records from  VFR_DIMS View ...");
 
                 // GEt Data from remote server
                 queryString = "SELECT Summaries.Number AS SummaryReportNumber, Summaries.Name AS SummaryReportTitle, PublicSafetyEvents.StartDate AS IncidentDate, " +
@@ -78,13 +80,6 @@ namespace LibraryIndexAnalysis
                                         " FROM Summaries INNER JOIN PublicSafetyEvents ON Summaries.Id = PublicSafetyEvents.Id  " +
                                         " LEFT OUTER JOIN Cases ON Cases.Id = Summaries.CaseId";
 
-                //queryString = "SELECT Summaries.Number, Summaries.Name, PublicSafetyEvents.StartDate, PublicSafetyEvents.EndDate, PublicSafetyEvents.DateReported, " +
-                //                        " PublicSafetyEvents.Description_Code, PublicSafetyEvents.Description_Description, PublicSafetyEvents.Address_StreetAddress, " +
-                //                        " PublicSafetyEvents.Address_City_Description, PublicSafetyEvents.Address_State_Code, Summaries.Discriminator, " +
-                //                        " Summaries.SubModuleType_Description, COALESCE(Cases.Number, ' ')AS[Case Number] " +
-                //                        " FROM Summaries INNER JOIN PublicSafetyEvents ON Summaries.Id = PublicSafetyEvents.Id  " +
-                //                        " LEFT OUTER JOIN Cases ON Cases.Id = Summaries.CaseId";
-
                 using (var connection = new SqlConnection(remoteConnectionString))
                 {
                     var command = new SqlCommand(queryString, connection);
@@ -93,100 +88,111 @@ namespace LibraryIndexAnalysis
                     {
                         while (reader.Read())
                         {
-                            recordsFound = SummaryNumberExit(String.Format("{0}", reader[0]), localConnectionString); 
-                            // Check if records already exist
-                            if (recordsFound > 1)
-                            {
-                                recordsIgnoredCount++;
-                                logger.Trace("      Summary Number: " + String.Format("{0}", reader[0]) + " already exist in the Database.");
-                                logger.Trace("          Records found: " + recordsFound.ToString());
-                                Console.WriteLine("      Summary Number: " + String.Format("{0}", reader[0]) + " already exist in the Database.");
+                            // This section was removed since there is no unique key in the data that is retrieved from the Database
+                            //recordsFound = SummaryNumberExit(String.Format("{0}", reader[0]), localConnectionString); 
+                            //// Check if records already exist
+                            //if (recordsFound > 1)
+                            //{
+                            //    recordsIgnoredCount++;
+                            //    logger.Trace("      Summary Number: " + String.Format("{0}", reader[0]) + " already exist in the Database.");
+                            //    logger.Trace("          Records found: " + recordsFound.ToString());
+                            //    Console.WriteLine("      Summary Number: " + String.Format("{0}", reader[0]) + " already exist in the Database.");
 
-                                // Get Record Information
-                                lookupRecord = GetRecordInformation(String.Format("{0}", reader[0]), remoteConnectionString);
+                            //    // Get Record Information
+                            //    lookupRecord = GetRecordInformation(String.Format("{0}", reader[0]), remoteConnectionString);
 
-                                logger.Trace("      Check if there is a change in Database Record...");
-                                // Perform a comparison , field by field
-                                if (String.Format("{0}", reader[1]).Trim() != lookupRecord.Name.Trim() ||
-                                    String.Format("{0}", reader[2]).Trim() != lookupRecord.StartDate.Trim() ||
-                                    String.Format("{0}", reader[3]).Trim() != lookupRecord.EndDate.Trim() ||
-                                    String.Format("{0}", reader[4]).Trim() != lookupRecord.DateReported.Trim() ||
-                                    String.Format("{0}", reader[5]).Trim() != lookupRecord.Description_Code.Trim() ||
-                                    String.Format("{0}", reader[6]).Trim() != lookupRecord.Description_Description.Trim() ||
-                                    String.Format("{0}", reader[7]).Trim() != lookupRecord.Address_StreetAddress.Trim() ||
-                                    String.Format("{0}", reader[8]).Trim() != lookupRecord.Address_City_Description.Trim() ||
-                                    String.Format("{0}", reader[9]).Trim() != lookupRecord.Address_State_Code.Trim() ||
-                                    String.Format("{0}", reader[10]).Trim() != lookupRecord.Discriminator.Trim() ||
-                                    String.Format("{0}", reader[11]).Trim() != lookupRecord.SubModuleType_Description.Trim() ||
-                                    String.Format("{0}", reader[12]).Trim() != lookupRecord.CaseNumber.Trim())
-                                {
-                                    // Someting change so we ned to update the records in the VFRLookup Table
-                                    logger.Trace("      There has been a change in the Record Information so an Update of the record in VFRLookup is required.");
-                                    Console.WriteLine("      There has been a change in the Record Information so an Update of the record in VFRLookup is required.");
-                                    // Perform and Update ...
-                                    logger.Trace("              Name");
-                                    logger.Trace("                  " + String.Format("{0}", reader[1]).Trim());
-                                    logger.Trace("                  " + lookupRecord.Name.Trim());
-                                    logger.Trace("              Start Date");
-                                    logger.Trace("                  " + String.Format("{0}", reader[2]).Trim());
-                                    logger.Trace("                  " + lookupRecord.StartDate.Trim());
-                                    logger.Trace("              End Date");
-                                    logger.Trace("                  " + String.Format("{0}", reader[3]).Trim());
-                                    logger.Trace("                  " + lookupRecord.EndDate.Trim());
-                                    logger.Trace("              Date Reported");
-                                    logger.Trace("                  " + String.Format("{0}", reader[4]).Trim());
-                                    logger.Trace("                  " + lookupRecord.DateReported.Trim());
-                                    logger.Trace("              Description Code");
-                                    logger.Trace("                  " + String.Format("{0}", reader[5]).Trim());
-                                    logger.Trace("                  " + lookupRecord.Description_Code.Trim());
-                                    logger.Trace("              Descriptio Description");
-                                    logger.Trace("                  " + String.Format("{0}", reader[6]).Trim());
-                                    logger.Trace("                  " + lookupRecord.Description_Description.Trim());
-                                    logger.Trace("              Address Street");
-                                    logger.Trace("                  " + String.Format("{0}", reader[7]).Trim());
-                                    logger.Trace("                  " + lookupRecord.Address_StreetAddress.Trim());
-                                    logger.Trace("              Address City Description");
-                                    logger.Trace("                  " + String.Format("{0}", reader[8]).Trim());
-                                    logger.Trace("                  " + lookupRecord.Address_City_Description.Trim());
-                                    logger.Trace("              Address State Code");
-                                    logger.Trace("                  " + String.Format("{0}", reader[9]).Trim());
-                                    logger.Trace("                  " + lookupRecord.Address_State_Code.Trim());
-                                    logger.Trace("              Discriminator");
-                                    logger.Trace("                  " + String.Format("{0}", reader[10]).Trim());
-                                    logger.Trace("                  " + lookupRecord.Discriminator.Trim());
-                                    logger.Trace("              SubModuleType Description");
-                                    logger.Trace("                  " + String.Format("{0}", reader[11]).Trim());
-                                    logger.Trace("                  " + lookupRecord.SubModuleType_Description.Trim());
-                                    logger.Trace("              CaseNumber");
-                                    logger.Trace("                  " + String.Format("{0}", reader[12]).Trim());
-                                    logger.Trace("                  " + lookupRecord.CaseNumber.Trim());
+                            //    logger.Trace("      Check if there is a change in Database Record...");
+                            //    // Perform a comparison , field by field
+                            //    if (String.Format("{0}", reader[1]).Trim() != lookupRecord.Name.Trim() ||
+                            //        String.Format("{0}", reader[2]).Trim() != lookupRecord.StartDate.Trim() ||
+                            //        String.Format("{0}", reader[3]).Trim() != lookupRecord.EndDate.Trim() ||
+                            //        String.Format("{0}", reader[4]).Trim() != lookupRecord.DateReported.Trim() ||
+                            //        String.Format("{0}", reader[5]).Trim() != lookupRecord.Description_Code.Trim() ||
+                            //        String.Format("{0}", reader[6]).Trim() != lookupRecord.Description_Description.Trim() ||
+                            //        String.Format("{0}", reader[7]).Trim() != lookupRecord.Address_StreetAddress.Trim() ||
+                            //        String.Format("{0}", reader[8]).Trim() != lookupRecord.Address_City_Description.Trim() ||
+                            //        String.Format("{0}", reader[9]).Trim() != lookupRecord.Address_State_Code.Trim() ||
+                            //        String.Format("{0}", reader[10]).Trim() != lookupRecord.Discriminator.Trim() ||
+                            //        String.Format("{0}", reader[11]).Trim() != lookupRecord.SubModuleType_Description.Trim() ||
+                            //        String.Format("{0}", reader[12]).Trim() != lookupRecord.CaseNumber.Trim())
+                            //    {
+                            //        // Someting change so we ned to update the records in the VFRLookup Table
+                            //        logger.Trace("      There has been a change in the Record Information so an Update of the record in VFRLookup is required.");
+                            //        Console.WriteLine("      There has been a change in the Record Information so an Update of the record in VFRLookup is required.");
+                            //        // Perform and Update ...
+                            //        logger.Trace("              Name");
+                            //        logger.Trace("                  " + String.Format("{0}", reader[1]).Trim());
+                            //        logger.Trace("                  " + lookupRecord.Name.Trim());
+                            //        logger.Trace("              Start Date");
+                            //        logger.Trace("                  " + String.Format("{0}", reader[2]).Trim());
+                            //        logger.Trace("                  " + lookupRecord.StartDate.Trim());
+                            //        logger.Trace("              End Date");
+                            //        logger.Trace("                  " + String.Format("{0}", reader[3]).Trim());
+                            //        logger.Trace("                  " + lookupRecord.EndDate.Trim());
+                            //        logger.Trace("              Date Reported");
+                            //        logger.Trace("                  " + String.Format("{0}", reader[4]).Trim());
+                            //        logger.Trace("                  " + lookupRecord.DateReported.Trim());
+                            //        logger.Trace("              Description Code");
+                            //        logger.Trace("                  " + String.Format("{0}", reader[5]).Trim());
+                            //        logger.Trace("                  " + lookupRecord.Description_Code.Trim());
+                            //        logger.Trace("              Descriptio Description");
+                            //        logger.Trace("                  " + String.Format("{0}", reader[6]).Trim());
+                            //        logger.Trace("                  " + lookupRecord.Description_Description.Trim());
+                            //        logger.Trace("              Address Street");
+                            //        logger.Trace("                  " + String.Format("{0}", reader[7]).Trim());
+                            //        logger.Trace("                  " + lookupRecord.Address_StreetAddress.Trim());
+                            //        logger.Trace("              Address City Description");
+                            //        logger.Trace("                  " + String.Format("{0}", reader[8]).Trim());
+                            //        logger.Trace("                  " + lookupRecord.Address_City_Description.Trim());
+                            //        logger.Trace("              Address State Code");
+                            //        logger.Trace("                  " + String.Format("{0}", reader[9]).Trim());
+                            //        logger.Trace("                  " + lookupRecord.Address_State_Code.Trim());
+                            //        logger.Trace("              Discriminator");
+                            //        logger.Trace("                  " + String.Format("{0}", reader[10]).Trim());
+                            //        logger.Trace("                  " + lookupRecord.Discriminator.Trim());
+                            //        logger.Trace("              SubModuleType Description");
+                            //        logger.Trace("                  " + String.Format("{0}", reader[11]).Trim());
+                            //        logger.Trace("                  " + lookupRecord.SubModuleType_Description.Trim());
+                            //        logger.Trace("              CaseNumber");
+                            //        logger.Trace("                  " + String.Format("{0}", reader[12]).Trim());
+                            //        logger.Trace("                  " + lookupRecord.CaseNumber.Trim());
 
 
-                                    UpdateLookupRecord(lookupRecord.Number, lookupRecord.Name, lookupRecord.StartDate, lookupRecord.EndDate , lookupRecord.DateReported,
-                                                       lookupRecord.Description_Code, lookupRecord.Description_Description, lookupRecord.Address_StreetAddress,
-                                                       lookupRecord.Address_City_Description, lookupRecord.Address_State_Code, lookupRecord.Discriminator,
-                                                       lookupRecord.SubModuleType_Description, lookupRecord.CaseNumber, localConnectionString);
-                                }
-                                else
-                                {
-                                    logger.Trace("      No changes detected in Record Information.");
-                                    Console.WriteLine("      No changes detected in Record Information.");
-                                }
-                            }
-                            else
-                            {
-                                recordsAddedCount++;
-                                logger.Trace("      Adding Summary Number: " + String.Format("{0}", reader[0]) + " to VFRLookup Database Table.");
-                                Console.WriteLine("      Adding Summary Number: " + String.Format("{0}", reader[0]) + " to VFRLookup Database Table.");
-                                // Perform an Insert ...
-                                AddLookupRecord(String.Format("{0}", reader[0]), String.Format("{0}", reader[1]), String.Format("{0}", reader[2]),
-                                                String.Format("{0}", reader[3]), String.Format("{0}", reader[4]), String.Format("{0}", reader[5]),
-                                                String.Format("{0}", reader[6]), String.Format("{0}", reader[7]), String.Format("{0}", reader[8]),
-                                                String.Format("{0}", reader[9]), String.Format("{0}", reader[10]), String.Format("{0}", reader[11]),
-                                                String.Format("{0}", reader[12]), localConnectionString);
-                            }
-                            
-                            recordsCount++;
+                            //        UpdateLookupRecord(lookupRecord.Number, lookupRecord.Name, lookupRecord.StartDate, lookupRecord.EndDate , lookupRecord.DateReported,
+                            //                           lookupRecord.Description_Code, lookupRecord.Description_Description, lookupRecord.Address_StreetAddress,
+                            //                           lookupRecord.Address_City_Description, lookupRecord.Address_State_Code, lookupRecord.Discriminator,
+                            //                           lookupRecord.SubModuleType_Description, lookupRecord.CaseNumber, localConnectionString);
+                            //    }
+                            //    else
+                            //    {
+                            //        logger.Trace("      No changes detected in Record Information.");
+                            //        Console.WriteLine("      No changes detected in Record Information.");
+                            //    }
+                            //}
+                            //else
+                            //{
+                            //    recordsAddedCount++;
+                            //    logger.Trace("      Adding Summary Number: " + String.Format("{0}", reader[0]) + " to VFRLookup Database Table.");
+                            //    Console.WriteLine("      Adding Summary Number: " + String.Format("{0}", reader[0]) + " to VFRLookup Database Table.");
+                            //    // Perform an Insert ...
+                            //    AddLookupRecord(String.Format("{0}", reader[0]), String.Format("{0}", reader[1]), String.Format("{0}", reader[2]),
+                            //                    String.Format("{0}", reader[3]), String.Format("{0}", reader[4]), String.Format("{0}", reader[5]),
+                            //                    String.Format("{0}", reader[6]), String.Format("{0}", reader[7]), String.Format("{0}", reader[8]),
+                            //                    String.Format("{0}", reader[9]), String.Format("{0}", reader[10]), String.Format("{0}", reader[11]),
+                            //                    String.Format("{0}", reader[12]), localConnectionString);
+                            //}
+
+                            recordsAddedCount++;
+                            logger.Trace("      Adding Summary Number: " + String.Format("{0}", reader[0]) + " to VFRLookup Database Table.");
+                            Console.WriteLine("      Adding Summary Number: " + String.Format("{0}", reader[0]) + " to VFRLookup Database Table.");
+                            // Perform an Insert ...
+                            AddLookupRecord(String.Format("{0}", reader[0]), String.Format("{0}", reader[1]), String.Format("{0}", reader[2]),
+                                            String.Format("{0}", reader[3]), String.Format("{0}", reader[4]), String.Format("{0}", reader[5]),
+                                            String.Format("{0}", reader[6]), String.Format("{0}", reader[7]), String.Format("{0}", reader[8]),
+                                            String.Format("{0}", reader[9]), String.Format("{0}", reader[10]), String.Format("{0}", reader[11]),
+                                            String.Format("{0}", reader[12]), localConnectionString);
+
+                            //recordsCount++;
                             //Console.WriteLine("     Number: " + String.Format("{0}", reader[0]));
                             //Console.WriteLine("     Name: " + String.Format("{0}", reader[1]));
                             //Console.WriteLine("     Start Date: " + String.Format("{0}", reader[2]));
@@ -203,12 +209,12 @@ namespace LibraryIndexAnalysis
 
                         }
                     }
-                    logger.Trace(" Number of Records found: " + recordsCount.ToString());
-                    Console.WriteLine(" Number of Records found: " + recordsCount.ToString());
+                    //logger.Trace(" Number of Records found: " + recordsCount.ToString());
+                    //Console.WriteLine(" Number of Records found: " + recordsCount.ToString());
                     logger.Trace(" Number of Records Added to VFRLookup Database Table: " + recordsAddedCount.ToString());
                     Console.WriteLine(" Number of Records Added to VFRLookup Database Table: " + recordsAddedCount.ToString());
-                    logger.Trace(" Number of Records ignored: " + recordsIgnoredCount.ToString());
-                    Console.WriteLine(" Number of Records ignored: " + recordsIgnoredCount.ToString());
+                    //logger.Trace(" Number of Records ignored: " + recordsIgnoredCount.ToString());
+                    //Console.WriteLine(" Number of Records ignored: " + recordsIgnoredCount.ToString());
                     connection.Close();
                 }
             }
@@ -344,13 +350,6 @@ namespace LibraryIndexAnalysis
             {
                 int recordsCount = 0;
 
-                //string queryString = "INSERT INTO VFRLookup ( Number, Name, StartDate, EndDate, DateReported, Description_Code, " +
-                //                     " Description_Description, Address_StreetAddress, Address_City_Description, Address_State_Code , " +
-                //                     " Discriminator, SubModuleType_Description, [Case Number] )" +
-                //                     "VALUES ('" + number + "','" + name + "','" + startDate + "','" + endDate + "','" + dateReported + "','" + descriptionCode + "','" +
-                //                     description + "','" + street + "','" + city + "','" + stateCode + "','" + descriminator + "','" + subModuleDescription + "','" +
-                //                     caseNumber + "')";
-
                 name = name.Replace("'", "''");
                 descriptionCode = descriptionCode.Replace("'", "''");
                 description = description.Replace("'", "''");
@@ -404,12 +403,6 @@ namespace LibraryIndexAnalysis
         {
             try
             {
-                //string queryString = "UPDATE VFRLookup SET Name ='" + name + "', StartDate ='" + startDate + "'," +
-                //                                          "EndDate = '" + endDate + "', DateReported = '" + dateReported + "'," +
-                //                                          "Description_Code = '" + descriptionCode + "', Description_Description = '" + description + "'," +
-                //                                          "Address_StreetAddress = '" + street + "', Address_City_Description = '" + city + "'," +
-                //                                          "Address_State_Code = '" + stateCode + "', Discriminator = '" + descriminator + "'," +
-                //                                          "SubModuleType_Description = '" + subModuleDescription + "', [Case Number] = '" + caseNumber + "',";
 
                 name = name.Replace("'", "''");
                 descriptionCode = descriptionCode.Replace("'", "''");
@@ -455,27 +448,20 @@ namespace LibraryIndexAnalysis
         {
             try
             {
-
-
                 string queryString = "DELETE FROM VFRLookup ";
 
-
-                //logger.Error("Query: " + queryString);
-                //Console.WriteLine("Query: " + queryString);
+                logger.Error("Removing records from VFRLookup ...");
+                Console.WriteLine("Removing records from VFRLookup ...");
 
                 using (var connection = new SqlConnection(connectionString))
                 {
                     var command = new SqlCommand(queryString, connection);
-                    //Console.WriteLine("Opening DB Connection ....");
                     connection.Open();
-                    //Console.WriteLine("Query run ...");
                     using (var reader = command.ExecuteReader())
                     {
 
                     }
                     connection.Close();
-                    //logger.Error("Records Count: " + recordsCount.ToString());
-                    //Console.WriteLine("Records Count: " + recordsCount.ToString());
                 }
             }
             catch (Exception e)
